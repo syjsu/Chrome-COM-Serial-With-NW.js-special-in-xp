@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>端口检测助手</title>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+</head>
+
+<body>
+    <script type="text/javascript">
+
+    var win = nw.Window.get();
+	win.showDevTools();
+
+    var onGetDevices = function(ports) {
+        for (var i = 0; i < ports.length; i++) {
+            console.log("Device COM: "+ports[i].path);
+        }
+    }
+    chrome.serial.getDevices(onGetDevices);
+
+    var iconv = require('iconv-lite');
+    function convertArrayBufferToString(buf) {
+        var bufView = new Uint8Array(buf);
+        var encodedString = String.fromCharCode.apply(null, bufView);
+        document.write(iconv.decode(encodedString, 'gbk'));
+        //nodejs转编码(不可直接转utf-8否则乱码)
+        return iconv.decode(encodedString, 'gbk');
+    }
+
+    var onReceiveCallback = function(info) {
+        console.log('Received: ', convertArrayBufferToString(info.data));
+    };
+
+    //convertStringToArrayBuffer('hello')
+    var convertStringToArrayBuffer = function(str) {
+        var buf = new ArrayBuffer(str.length);
+        var bufView = new Uint8Array(buf);
+        for (var i = 0; i < str.length; i++) {
+            bufView[i] = str.charCodeAt(i);
+        }
+        return buf;
+    };
+
+    var onConnect = function(connectionInfo) {
+        
+        console.log("Connection: ",chrome.runtime.lastError, connectionInfo);
+
+        chrome.serial.onReceive.addListener(onReceiveCallback);
+        var connectionId = connectionInfo.connectionId;
+        var buffer = new ArrayBuffer(1);
+        var dataView = new DataView(buffer);
+        dataView.setInt8(0, 0x01);
+        
+        chrome.serial.send(connectionId, buffer, function() {
+            chrome.serial.update(connectionId, {
+                bitrate: 38400
+            }, function(result) {
+                console.log("Send: ",chrome.runtime.lastError, result);
+                chrome.serial.send(connectionId, buffer, console.log.bind(console));
+            });
+        });
+
+        //chrome.serial.send(1, new ArrayBuffer(1),function(){})
+
+    };
+
+    chrome.serial.connect('COM3', {
+        bitrate: 38400
+    }, onConnect);
+
+    </script>
+</body>
+
+</html>
